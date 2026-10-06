@@ -1,3 +1,4 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -181,14 +182,15 @@ export default function InventoryPage() {
   };
 
   return (
+    <PageTransition>
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Inventory Management</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Inventory Management</h1>
           <p className="text-slate-600 mt-1">Manage construction materials and stock levels</p>
         </div>
         {canEdit && (
-          <Button onClick={() => setIsAddDialogOpen(true)} className="bg-orange-600 hover:bg-orange-700">
+          <Button onClick={() => setIsAddDialogOpen(true)} className="bg-orange-600 hover:bg-orange-700 self-start sm:self-auto">
             <Plus className="h-4 w-4 mr-2" />
             Add Material
           </Button>
@@ -357,7 +359,7 @@ export default function InventoryPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -591,5 +593,6 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
     </div>
+    </PageTransition>
   );
 }

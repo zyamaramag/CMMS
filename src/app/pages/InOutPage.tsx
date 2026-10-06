@@ -1,11 +1,9 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
 import {
   Table,
@@ -15,310 +13,270 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Transaction } from '../data/mockData';
-import { ArrowUpRight, ArrowDownRight, AlertCircle, Printer, CheckCircle } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Textarea } from '../components/ui/textarea';
+import { Label } from '../components/ui/label';
+import { MaterialRequest } from '../data/mockData';
+import { CheckCircle, XCircle, Clock, ShieldAlert, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { toast } from 'sonner';
-import TransactionReceipt from '../components/TransactionReceipt';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import RequestApprovalReceipt from '../components/RequestApprovalReceipt';
 
-export default function InOutPage() {
+export default function ApprovalPage() {
   const { user } = useAuth();
-  const { materials, transactions, requests, addTransaction, addActivityLog } = useData();
-  const [formData, setFormData] = useState({
-    materialId: '',
-    quantity: 0,
-    assignedTo: '',
-    notes: ''
-  });
-  const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
+  const { requests, approveRequest, rejectRequest } = useData();
+  const [selectedRequest, setSelectedRequest] = useState<MaterialRequest | null>(null);
+  const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [approvedRequest, setApprovedRequest] = useState<MaterialRequest | null>(null);
   const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
-  const canManage = user?.role === 'staff'; // Only warehouse staff can manage IN/OUT
-  const canView = user?.role === 'admin' || user?.role === 'manager'; // Admin and Manager can only view
+  const isAdmin = user?.role === 'admin';
 
-  const approvedRequestsForProcessing = requests.filter(r => r.status === 'approved');
+  const pendingRequests = requests.filter(r => r.status === 'pending');
+  const approvedRequests = requests.filter(r => r.status === 'approved');
+  const rejectedRequests = requests.filter(r => r.status === 'rejected');
 
-  const handleSubmit = (type: 'in' | 'out') => {
-    const material = materials.find(m => m.id === formData.materialId);
-    if (!material || !user) return;
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Request Approval</h1>
+          <p className="text-slate-600 mt-1">Review and approve material requests</p>
+        </div>
+        <Alert variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription>
+            You do not have permission to access this page. Only Admins can approve material requests.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
-    addTransaction({
-      type,
-      materialId: formData.materialId,
-      materialName: material.name,
-      quantity: formData.quantity,
-      date: new Date().toISOString(),
-      assignedTo: formData.assignedTo,
-      notes: formData.notes,
-      performedBy: user.username
-    });
+  const handleApprove = () => {
+    if (!selectedRequest || !user) return;
 
-    addActivityLog({
-      userId: user.id,
-      username: user.username,
-      role: user.role,
-      action: type === 'in' ? 'Material IN' : 'Material OUT',
-      timestamp: new Date().toISOString(),
-      details: `${type === 'in' ? 'Received' : 'Released'} ${formData.quantity} ${material.unit} of ${material.name}`
-    });
+    approveRequest(selectedRequest.id, user.fullName);
+    toast.success(`Request ${selectedRequest.id} approved successfully`);
+    setIsApproveDialogOpen(false);
 
-    toast.success(`Material ${type === 'in' ? 'IN' : 'OUT'} recorded successfully`);
-
-    // Show receipt for the new transaction
-    const newTransaction = transactions[0]; // Get the most recent transaction
-    if (newTransaction) {
-      setSelectedTransaction(newTransaction);
-      setIsReceiptOpen(true);
-    }
-
-    setFormData({
-      materialId: '',
-      quantity: 0,
-      assignedTo: '',
-      notes: ''
-    });
+    // Show receipt for approved request
+    const updatedRequest = {
+      ...selectedRequest,
+      status: 'approved' as const,
+      reviewedBy: user.fullName,
+      reviewDate: new Date().toISOString()
+    };
+    setApprovedRequest(updatedRequest);
+    setIsReceiptOpen(true);
+    setSelectedRequest(null);
   };
 
-  const handlePrintReceipt = (transaction: Transaction) => {
-    setSelectedTransaction(transaction);
+  const handleReject = () => {
+    if (!selectedRequest || !user || !rejectionReason.trim()) return;
+
+    rejectRequest(selectedRequest.id, user.fullName, rejectionReason);
+    toast.error(`Request ${selectedRequest.id} rejected`);
+    setIsRejectDialogOpen(false);
+
+    // Show receipt for rejected request
+    const updatedRequest = {
+      ...selectedRequest,
+      status: 'rejected' as const,
+      reviewedBy: user.fullName,
+      reviewDate: new Date().toISOString(),
+      rejectionReason: rejectionReason
+    };
+    setApprovedRequest(updatedRequest);
     setIsReceiptOpen(true);
+    setSelectedRequest(null);
+    setRejectionReason('');
+  };
+
+  const openApproveDialog = (request: MaterialRequest) => {
+    setSelectedRequest(request);
+    setIsApproveDialogOpen(true);
+  };
+
+  const openRejectDialog = (request: MaterialRequest) => {
+    setSelectedRequest(request);
+    setIsRejectDialogOpen(true);
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-slate-900">Material IN/OUT Tracking</h1>
-        <p className="text-slate-600 mt-1">Record material movements and track transactions</p>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Request Approval</h1>
+        <p className="text-slate-600 mt-1">Review and manage material requisitions</p>
       </div>
 
-      {canView && !canManage && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            You have view-only access. Only warehouse staff can record material IN/OUT transactions.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {!canManage && !canView && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            You don't have access to this page. Contact your administrator.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {canManage && user?.role === 'staff' && approvedRequestsForProcessing.length > 0 && (
-        <Card className="bg-green-50 border-green-200">
-          <CardHeader>
-            <CardTitle className="text-green-800 flex items-center gap-2">
-              <CheckCircle className="h-5 w-5" />
-              Approved Requests Ready for Processing
-            </CardTitle>
-            <CardDescription className="text-green-700">
-              {approvedRequestsForProcessing.length} request(s) approved by Admin
-            </CardDescription>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {approvedRequestsForProcessing.slice(0, 5).map((request) => (
-                <div key={request.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-green-200">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="font-medium text-sm">{request.materialName}</p>
-                      <Badge className="bg-green-600">{request.id}</Badge>
-                    </div>
-                    <p className="text-xs text-slate-600 mt-1">{request.purpose}</p>
-                    <p className="text-xs text-slate-500 mt-1">
-                      Requested by {request.requestedBy} • Needed by {new Date(request.dateNeeded).toLocaleDateString()}
-                    </p>
-                  </div>
-                  <div className="text-right ml-4">
-                    <p className="text-sm font-medium text-green-700">{request.quantity} {request.unit}</p>
-                    <Badge variant="outline" className="text-xs mt-1">Ready</Badge>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Material IN Form */}
-        <Card className={!canManage ? 'opacity-60 pointer-events-none' : ''}>
-          <CardHeader className="bg-gradient-to-r from-green-50 to-green-100">
-            <CardTitle className="flex items-center gap-2 text-green-700">
-              <ArrowUpRight className="h-5 w-5" />
-              Material IN
-            </CardTitle>
-            <CardDescription>Record incoming materials</CardDescription>
-          </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Material</Label>
-                <Select
-                  value={formData.materialId}
-                  onValueChange={(value) => setFormData({ ...formData, materialId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select material" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {materials.map(material => (
-                      <SelectItem key={material.id} value={material.id}>
-                        {material.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Quantity</Label>
-                <Input
-                  type="number"
-                  value={formData.quantity || ''}
-                  onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                  placeholder="Enter quantity"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Source/Warehouse</Label>
-                <Input
-                  value={formData.assignedTo}
-                  onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                  placeholder="e.g., Warehouse A, Supplier XYZ"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Delivery details, supplier info, etc."
-                  rows={3}
-                />
-              </div>
-
-              <Button
-                onClick={() => handleSubmit('in')}
-                className="w-full bg-green-600 hover:bg-green-700"
-                disabled={!formData.materialId || !formData.quantity}
-              >
-                Record Material IN
-              </Button>
-            </div>
+            <div className="text-2xl font-bold text-yellow-600">{pendingRequests.length}</div>
+            <p className="text-xs text-slate-600 mt-1">Awaiting review</p>
           </CardContent>
         </Card>
 
-        {/* Material OUT Form */}
-        <Card className={!canManage ? 'opacity-60 pointer-events-none' : ''}>
-          <CardHeader className="bg-gradient-to-r from-yellow-50 to-yellow-100">
-            <CardTitle className="flex items-center gap-2 text-yellow-700">
-              <ArrowDownRight className="h-5 w-5" />
-              Material OUT
-            </CardTitle>
-            <CardDescription>Release materials to projects</CardDescription>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Approved</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-600" />
           </CardHeader>
-          <CardContent className="pt-6">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Material</Label>
-                <Select
-                  value={formData.materialId}
-                  onValueChange={(value) => setFormData({ ...formData, materialId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select material" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {materials.map(material => (
-                      <SelectItem key={material.id} value={material.id}>
-                        {material.name} ({material.quantity} {material.unit} available)
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{approvedRequests.length}</div>
+            <p className="text-xs text-slate-600 mt-1">Ready for processing</p>
+          </CardContent>
+        </Card>
 
-              <div className="space-y-2">
-                <Label>Quantity</Label>
-                <Input
-                  type="number"
-                  value={formData.quantity || ''}
-                  onChange={(e) => setFormData({ ...formData, quantity: Number(e.target.value) })}
-                  placeholder="Enter quantity"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Assigned To (Project/Personnel)</Label>
-                <Input
-                  value={formData.assignedTo}
-                  onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                  placeholder="e.g., Project Site A, John Doe"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea
-                  value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  placeholder="Purpose, location, special instructions, etc."
-                  rows={3}
-                />
-              </div>
-
-              <Button
-                onClick={() => handleSubmit('out')}
-                className="w-full bg-yellow-500 hover:bg-yellow-600 text-slate-900"
-                disabled={!formData.materialId || !formData.quantity}
-              >
-                Release Material OUT
-              </Button>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{rejectedRequests.length}</div>
+            <p className="text-xs text-slate-600 mt-1">Not approved</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Transaction History */}
       <Card>
         <CardHeader>
-          <CardTitle>Transaction History</CardTitle>
-          <CardDescription>Complete record of all material movements</CardDescription>
+          <CardTitle>Material Requests</CardTitle>
+          <CardDescription>Review and take action on pending requests</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="all">
+          <Tabs defaultValue="pending">
             <TabsList className="mb-4">
-              <TabsTrigger value="all">All Transactions</TabsTrigger>
-              <TabsTrigger value="in">Material IN</TabsTrigger>
-              <TabsTrigger value="out">Material OUT</TabsTrigger>
+              <TabsTrigger value="pending">
+                Pending ({pendingRequests.length})
+              </TabsTrigger>
+              <TabsTrigger value="approved">
+                Approved ({approvedRequests.length})
+              </TabsTrigger>
+              <TabsTrigger value="rejected">
+                Rejected ({rejectedRequests.length})
+              </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="all">
-              <TransactionTable transactions={transactions} onPrintReceipt={handlePrintReceipt} />
+            <TabsContent value="pending">
+              {pendingRequests.length === 0 ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>No pending requests at this time.</AlertDescription>
+                </Alert>
+              ) : (
+                <RequestTable
+                  requests={pendingRequests}
+                  onApprove={openApproveDialog}
+                  onReject={openRejectDialog}
+                  showActions
+                />
+              )}
             </TabsContent>
-            <TabsContent value="in">
-              <TransactionTable transactions={transactions.filter(t => t.type === 'in')} onPrintReceipt={handlePrintReceipt} />
+
+            <TabsContent value="approved">
+              <RequestTable requests={approvedRequests} showActions={false} />
             </TabsContent>
-            <TabsContent value="out">
-              <TransactionTable transactions={transactions.filter(t => t.type === 'out')} onPrintReceipt={handlePrintReceipt} />
+
+            <TabsContent value="rejected">
+              <RequestTable requests={rejectedRequests} showActions={false} />
             </TabsContent>
           </Tabs>
         </CardContent>
       </Card>
 
-      {/* Receipt Modal */}
-      <TransactionReceipt
-        transaction={selectedTransaction}
+      {/* Approve Dialog */}
+      <Dialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Material Request</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve request {selectedRequest?.id}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="text-slate-600">Material:</div>
+              <div className="font-medium">{selectedRequest?.materialName}</div>
+              <div className="text-slate-600">Quantity:</div>
+              <div className="font-medium">{selectedRequest?.quantity} {selectedRequest?.unit}</div>
+              <div className="text-slate-600">Requested by:</div>
+              <div className="font-medium">{selectedRequest?.requestedBy}</div>
+              <div className="text-slate-600">Purpose:</div>
+              <div className="font-medium">{selectedRequest?.purpose}</div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsApproveDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Approve Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Dialog */}
+      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Material Request</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting request {selectedRequest?.id}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+              <div className="text-slate-600">Material:</div>
+              <div className="font-medium">{selectedRequest?.materialName}</div>
+              <div className="text-slate-600">Quantity:</div>
+              <div className="font-medium">{selectedRequest?.quantity} {selectedRequest?.unit}</div>
+              <div className="text-slate-600">Requested by:</div>
+              <div className="font-medium">{selectedRequest?.requestedBy}</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Rejection Reason</Label>
+              <Textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Explain why this request is being rejected..."
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRejectDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={!rejectionReason.trim()}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Reject Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approval/Rejection Receipt */}
+      <RequestApprovalReceipt
+        request={approvedRequest}
         isOpen={isReceiptOpen}
         onClose={() => setIsReceiptOpen(false)}
       />
@@ -326,57 +284,83 @@ export default function InOutPage() {
   );
 }
 
-function TransactionTable({ transactions, onPrintReceipt }: { transactions: Transaction[]; onPrintReceipt?: (transaction: Transaction) => void }) {
+function RequestTable({
+  requests,
+  showActions,
+  onApprove,
+  onReject
+}: {
+  requests: MaterialRequest[];
+  showActions: boolean;
+  onApprove?: (request: MaterialRequest) => void;
+  onReject?: (request: MaterialRequest) => void;
+}) {
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>ID</TableHead>
-            <TableHead>Type</TableHead>
+            <TableHead>Request ID</TableHead>
             <TableHead>Material</TableHead>
             <TableHead>Quantity</TableHead>
-            <TableHead>Assigned To/Source</TableHead>
-            <TableHead>Date</TableHead>
-            <TableHead>Performed By</TableHead>
-            <TableHead className="text-right">Actions</TableHead>
+            <TableHead>Requested By</TableHead>
+            <TableHead>Date Needed</TableHead>
+            <TableHead>Purpose</TableHead>
+            <TableHead>Status</TableHead>
+            {showActions && <TableHead className="text-right">Actions</TableHead>}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {transactions.map((transaction) => (
-            <TableRow key={transaction.id}>
-              <TableCell className="font-medium">{transaction.id}</TableCell>
+          {requests.map((request) => (
+            <TableRow key={request.id}>
+              <TableCell className="font-medium">{request.id}</TableCell>
+              <TableCell>{request.materialName}</TableCell>
+              <TableCell>
+                {request.quantity} {request.unit}
+              </TableCell>
+              <TableCell>{request.requestedBy}</TableCell>
+              <TableCell>{new Date(request.dateNeeded).toLocaleDateString()}</TableCell>
+              <TableCell className="max-w-xs">
+                <span className="text-sm text-slate-600 line-clamp-2">{request.purpose}</span>
+              </TableCell>
               <TableCell>
                 <Badge
-                  variant={transaction.type === 'in' ? 'default' : 'secondary'}
-                  className={transaction.type === 'in' ? 'bg-green-600' : 'bg-orange-600'}
+                  variant={
+                    request.status === 'approved'
+                      ? 'default'
+                      : request.status === 'rejected'
+                      ? 'destructive'
+                      : 'secondary'
+                  }
+                  className={request.status === 'approved' ? 'bg-green-600' : request.status === 'pending' ? 'bg-yellow-600' : ''}
                 >
-                  <div className="flex items-center gap-1">
-                    {transaction.type === 'in' ? (
-                      <ArrowUpRight className="h-3 w-3" />
-                    ) : (
-                      <ArrowDownRight className="h-3 w-3" />
-                    )}
-                    {transaction.type.toUpperCase()}
-                  </div>
+                  {request.status.toUpperCase()}
                 </Badge>
               </TableCell>
-              <TableCell>{transaction.materialName}</TableCell>
-              <TableCell>{transaction.quantity}</TableCell>
-              <TableCell>{transaction.assignedTo}</TableCell>
-              <TableCell>{new Date(transaction.date).toLocaleString()}</TableCell>
-              <TableCell>{transaction.performedBy}</TableCell>
-              <TableCell className="text-right">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => onPrintReceipt?.(transaction)}
-                  className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
-                >
-                  <Printer className="h-4 w-4 mr-1" />
-                  Print
-                </Button>
-              </TableCell>
+              {showActions && (
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => onApprove?.(request)}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => onReject?.(request)}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </TableCell>
+              )}
             </TableRow>
           ))}
         </TableBody>

@@ -1,8 +1,9 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
-import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useData } from '../contexts/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Input } from '../components/ui/input';
+import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import {
   Table,
@@ -12,175 +13,358 @@ import {
   TableHeader,
   TableRow,
 } from '../components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Search, Activity } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import { Textarea } from '../components/ui/textarea';
+import { Label } from '../components/ui/label';
+import { MaterialRequest } from '../data/mockData';
+import { CheckCircle, XCircle, Clock, ShieldAlert, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription } from '../components/ui/alert';
+import { toast } from 'sonner';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import RequestApprovalReceipt from '../components/RequestApprovalReceipt';
 
-export default function ActivityLogsPage() {
-  const { activityLogs } = useData();
+export default function ApprovalPage() {
   const { user } = useAuth();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [actionFilter, setActionFilter] = useState('all');
+  const { requests, approveRequest, rejectRequest } = useData();
+  const [selectedRequest, setSelectedRequest] = useState<MaterialRequest | null>(null);
+  const [isApproveDialogOpen, setIsApproveDialogOpen] = useState(false);
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+  const [approvedRequest, setApprovedRequest] = useState<MaterialRequest | null>(null);
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
 
-  // Filter logs based on user role
-  const roleBasedLogs = activityLogs.filter(log => {
-    // Warehouse staff can only see IN/OUT transaction logs
-    if (user?.role === 'staff') {
-      return log.action === 'Material IN' || log.action === 'Material OUT';
-    }
-    // Admin can see all logs
-    return true;
-  });
+  const isAdmin = user?.role === 'admin';
 
-  const filteredLogs = roleBasedLogs.filter(log => {
-    const matchesSearch = log.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         log.details.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesRole = roleFilter === 'all' || log.role === roleFilter;
-    const matchesAction = actionFilter === 'all' || log.action === actionFilter;
-    return matchesSearch && matchesRole && matchesAction;
-  });
+  const pendingRequests = requests.filter(r => r.status === 'pending');
+  const approvedRequests = requests.filter(r => r.status === 'approved');
+  const rejectedRequests = requests.filter(r => r.status === 'rejected');
 
-  const uniqueActions = Array.from(new Set(roleBasedLogs.map(l => l.action)));
+  if (!isAdmin) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Request Approval</h1>
+          <p className="text-slate-600 mt-1">Review and approve material requests</p>
+        </div>
+        <Alert variant="destructive">
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription>
+            You do not have permission to access this page. Only Admins can approve material requests.
+          </AlertDescription>
+        </Alert>
+      </div>
+    );
+  }
 
-  const getRoleBadgeVariant = (role: string) => {
-    switch (role) {
-      case 'admin':
-        return 'destructive';
-      case 'staff':
-        return 'default';
-      default:
-        return 'secondary';
-    }
+  const handleApprove = () => {
+    if (!selectedRequest || !user) return;
+
+    approveRequest(selectedRequest.id, user.fullName);
+    toast.success(`Request ${selectedRequest.id} approved successfully`);
+    setIsApproveDialogOpen(false);
+
+    // Show receipt for approved request
+    const updatedRequest = {
+      ...selectedRequest,
+      status: 'approved' as const,
+      reviewedBy: user.fullName,
+      reviewDate: new Date().toISOString()
+    };
+    setApprovedRequest(updatedRequest);
+    setIsReceiptOpen(true);
+    setSelectedRequest(null);
+  };
+
+  const handleReject = () => {
+    if (!selectedRequest || !user || !rejectionReason.trim()) return;
+
+    rejectRequest(selectedRequest.id, user.fullName, rejectionReason);
+    toast.error(`Request ${selectedRequest.id} rejected`);
+    setIsRejectDialogOpen(false);
+
+    // Show receipt for rejected request
+    const updatedRequest = {
+      ...selectedRequest,
+      status: 'rejected' as const,
+      reviewedBy: user.fullName,
+      reviewDate: new Date().toISOString(),
+      rejectionReason: rejectionReason
+    };
+    setApprovedRequest(updatedRequest);
+    setIsReceiptOpen(true);
+    setSelectedRequest(null);
+    setRejectionReason('');
+  };
+
+  const openApproveDialog = (request: MaterialRequest) => {
+    setSelectedRequest(request);
+    setIsApproveDialogOpen(true);
+  };
+
+  const openRejectDialog = (request: MaterialRequest) => {
+    setSelectedRequest(request);
+    setIsRejectDialogOpen(true);
   };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-slate-900">Activity Logs</h1>
-        <p className="text-slate-600 mt-1">
-          {user?.role === 'staff' 
-            ? 'Monitor material IN/OUT transactions' 
-            : 'Monitor all user actions and system events'}
-        </p>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Request Approval</h1>
+        <p className="text-slate-600 mt-1">Review and manage material requisitions</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">
-              {user?.role === 'staff' ? "Today's Transactions" : "Today's Activity"}
-            </CardTitle>
-            <Activity className="h-4 w-4 text-yellow-600" />
+            <CardTitle className="text-sm font-medium">Pending Requests</CardTitle>
+            <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">
-              {roleBasedLogs.filter(l => {
-                const logDate = new Date(l.timestamp);
-                const today = new Date();
-                return logDate.toDateString() === today.toDateString();
-              }).length}
-            </div>
-            <p className="text-xs text-slate-600 mt-1">
-              {user?.role === 'staff' ? 'Transactions today' : 'Actions performed today'}
-            </p>
+            <div className="text-2xl font-bold text-yellow-600">{pendingRequests.length}</div>
+            <p className="text-xs text-slate-600 mt-1">Awaiting review</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Approved</CardTitle>
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">{approvedRequests.length}</div>
+            <p className="text-xs text-slate-600 mt-1">Ready for processing</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Rejected</CardTitle>
+            <XCircle className="h-4 w-4 text-red-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">{rejectedRequests.length}</div>
+            <p className="text-xs text-slate-600 mt-1">Not approved</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {user?.role === 'staff' ? 'Transaction History' : 'System Activity Log'}
-          </CardTitle>
-          <CardDescription>
-            {user?.role === 'staff' 
-              ? 'Material IN/OUT transaction records' 
-              : 'Detailed audit trail of all system actions'}
-          </CardDescription>
-          <div className="flex flex-col sm:flex-row gap-4 mt-4">
-            <div className="flex-1">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
-                <Input
-                  placeholder="Search logs..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={roleFilter} onValueChange={setRoleFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by role" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-                <SelectItem value="staff">Staff</SelectItem>
-                <SelectItem value="viewer">Viewer</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={actionFilter} onValueChange={setActionFilter}>
-              <SelectTrigger className="w-full sm:w-[180px]">
-                <SelectValue placeholder="Filter by action" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Actions</SelectItem>
-                {uniqueActions.map(action => (
-                  <SelectItem key={action} value={action}>{action}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <CardTitle>Material Requests</CardTitle>
+          <CardDescription>Review and take action on pending requests</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Timestamp</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Role</TableHead>
-                  <TableHead>Action</TableHead>
-                  <TableHead>Details</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredLogs.length > 0 ? (
-                  filteredLogs.map((log) => (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-medium">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </TableCell>
-                      <TableCell>{log.username}</TableCell>
-                      <TableCell>
-                        <Badge variant={getRoleBadgeVariant(log.role)}>
-                          {log.role}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{log.action}</Badge>
-                      </TableCell>
-                      <TableCell className="max-w-md">
-                        <span className="text-sm text-slate-600">{log.details}</span>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell colSpan={5} className="text-center py-8 text-slate-500">
-                      {user?.role === 'staff' 
-                        ? 'No IN/OUT transactions recorded yet' 
-                        : 'No activity logs found'}
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
+          <Tabs defaultValue="pending">
+            <TabsList className="mb-4">
+              <TabsTrigger value="pending">
+                Pending ({pendingRequests.length})
+              </TabsTrigger>
+              <TabsTrigger value="approved">
+                Approved ({approvedRequests.length})
+              </TabsTrigger>
+              <TabsTrigger value="rejected">
+                Rejected ({rejectedRequests.length})
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="pending">
+              {pendingRequests.length === 0 ? (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>No pending requests at this time.</AlertDescription>
+                </Alert>
+              ) : (
+                <RequestTable
+                  requests={pendingRequests}
+                  onApprove={openApproveDialog}
+                  onReject={openRejectDialog}
+                  showActions
+                />
+              )}
+            </TabsContent>
+
+            <TabsContent value="approved">
+              <RequestTable requests={approvedRequests} showActions={false} />
+            </TabsContent>
+
+            <TabsContent value="rejected">
+              <RequestTable requests={rejectedRequests} showActions={false} />
+            </TabsContent>
+          </Tabs>
         </CardContent>
       </Card>
+
+      {/* Approve Dialog */}
+      <Dialog open={isApproveDialogOpen} onOpenChange={setIsApproveDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Approve Material Request</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to approve request {selectedRequest?.id}?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-4">
+            <div className="grid grid-cols-2 gap-2 text-sm">
+              <div className="text-slate-600">Material:</div>
+              <div className="font-medium">{selectedRequest?.materialName}</div>
+              <div className="text-slate-600">Quantity:</div>
+              <div className="font-medium">{selectedRequest?.quantity} {selectedRequest?.unit}</div>
+              <div className="text-slate-600">Requested by:</div>
+              <div className="font-medium">{selectedRequest?.requestedBy}</div>
+              <div className="text-slate-600">Purpose:</div>
+              <div className="font-medium">{selectedRequest?.purpose}</div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsApproveDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleApprove} className="bg-green-600 hover:bg-green-700">
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Approve Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reject Dialog */}
+      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reject Material Request</DialogTitle>
+            <DialogDescription>
+              Please provide a reason for rejecting request {selectedRequest?.id}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+              <div className="text-slate-600">Material:</div>
+              <div className="font-medium">{selectedRequest?.materialName}</div>
+              <div className="text-slate-600">Quantity:</div>
+              <div className="font-medium">{selectedRequest?.quantity} {selectedRequest?.unit}</div>
+              <div className="text-slate-600">Requested by:</div>
+              <div className="font-medium">{selectedRequest?.requestedBy}</div>
+            </div>
+            <div className="space-y-2">
+              <Label>Rejection Reason</Label>
+              <Textarea
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+                placeholder="Explain why this request is being rejected..."
+                rows={4}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsRejectDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={handleReject}
+              disabled={!rejectionReason.trim()}
+            >
+              <XCircle className="h-4 w-4 mr-2" />
+              Reject Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Approval/Rejection Receipt */}
+      <RequestApprovalReceipt
+        request={approvedRequest}
+        isOpen={isReceiptOpen}
+        onClose={() => setIsReceiptOpen(false)}
+      />
+    </div>
+  );
+}
+
+function RequestTable({
+  requests,
+  showActions,
+  onApprove,
+  onReject
+}: {
+  requests: MaterialRequest[];
+  showActions: boolean;
+  onApprove?: (request: MaterialRequest) => void;
+  onReject?: (request: MaterialRequest) => void;
+}) {
+  return (
+    <div className="rounded-md border overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Request ID</TableHead>
+            <TableHead>Material</TableHead>
+            <TableHead>Quantity</TableHead>
+            <TableHead>Requested By</TableHead>
+            <TableHead>Date Needed</TableHead>
+            <TableHead>Purpose</TableHead>
+            <TableHead>Status</TableHead>
+            {showActions && <TableHead className="text-right">Actions</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {requests.map((request) => (
+            <TableRow key={request.id}>
+              <TableCell className="font-medium">{request.id}</TableCell>
+              <TableCell>{request.materialName}</TableCell>
+              <TableCell>
+                {request.quantity} {request.unit}
+              </TableCell>
+              <TableCell>{request.requestedBy}</TableCell>
+              <TableCell>{new Date(request.dateNeeded).toLocaleDateString()}</TableCell>
+              <TableCell className="max-w-xs">
+                <span className="text-sm text-slate-600 line-clamp-2">{request.purpose}</span>
+              </TableCell>
+              <TableCell>
+                <Badge
+                  variant={
+                    request.status === 'approved'
+                      ? 'default'
+                      : request.status === 'rejected'
+                      ? 'destructive'
+                      : 'secondary'
+                  }
+                  className={request.status === 'approved' ? 'bg-green-600' : request.status === 'pending' ? 'bg-yellow-600' : ''}
+                >
+                  {request.status.toUpperCase()}
+                </Badge>
+              </TableCell>
+              {showActions && (
+                <TableCell className="text-right">
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => onApprove?.(request)}
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      onClick={() => onReject?.(request)}
+                    >
+                      <XCircle className="h-4 w-4 mr-1" />
+                      Reject
+                    </Button>
+                  </div>
+                </TableCell>
+              )}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useAuth } from '../contexts/AuthContext';
@@ -93,6 +94,7 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-yellow-50 via-white to-blue-50 p-4">
+      <PageTransition>
       <Card className="w-full max-w-md shadow-2xl border-yellow-200">
         <CardHeader className="space-y-2 bg-gradient-to-r from-yellow-500 to-yellow-600 text-white rounded-t-lg">
           <div className="flex justify-center mb-2">
@@ -232,6 +234,7 @@ export default function LoginPage() {
           </div>
         </CardContent>
       </Card>
+      </PageTransition>
     </div>
   );
 }

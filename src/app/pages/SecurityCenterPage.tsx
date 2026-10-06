@@ -1,3 +1,4 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -209,18 +210,19 @@ export default function SecurityCenterPage() {
   const activeSecurityLayers = networkSecurityFeatures.length + applicationSecurityFeatures.length;
 
   return (
+    <PageTransition>
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900 flex items-center gap-3">
-            <Shield className="h-8 w-8 text-blue-600" />
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900 flex items-center gap-3">
+            <Shield className="h-7 w-7 sm:h-8 sm:w-8 text-blue-600" />
             Security Center
           </h1>
           <p className="text-slate-600 mt-1">Comprehensive security monitoring and protection</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-600">Last updated: {lastUpdated}</span>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <span className="text-sm text-slate-600 hidden sm:inline">Last updated: {lastUpdated}</span>
           <Button
             onClick={handleRefresh}
             variant="outline"
@@ -439,5 +441,6 @@ export default function SecurityCenterPage() {
         </CardContent>
       </Card>
     </div>
+    </PageTransition>
   );
 }

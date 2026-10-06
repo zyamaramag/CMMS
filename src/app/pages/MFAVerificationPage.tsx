@@ -89,6 +89,20 @@ export default function MFAVerificationPage() {
   };
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    // If box already has a digit and user types a new digit, replace and advance
+    if (/^\d$/.test(e.key) && otp[index]) {
+      e.preventDefault();
+      if (error) setError('');
+      const newOtp = [...otp];
+      newOtp[index] = e.key;
+      setOtp(newOtp);
+      if (index < 5) {
+        inputRefs.current[index + 1]?.focus();
+        setFocusedIndex(index + 1);
+      }
+      return;
+    }
+
     // Handle backspace - move to previous box
     if (e.key === 'Backspace') {
       if (!otp[index] && index > 0) {
@@ -103,7 +117,7 @@ export default function MFAVerificationPage() {
         setOtp(newOtp);
       }
     }
-    
+
     // Handle arrow keys for navigation
     if (e.key === 'ArrowLeft' && index > 0) {
       inputRefs.current[index - 1]?.focus();

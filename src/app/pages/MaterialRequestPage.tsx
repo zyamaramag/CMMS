@@ -1,3 +1,4 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -96,9 +97,10 @@ export default function MaterialRequestPage() {
   };
 
   return (
+    <PageTransition>
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-slate-900">Material Requests</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Material Requests</h1>
         <p className="text-slate-600 mt-1">Submit and track material requisitions</p>
       </div>
 
@@ -195,7 +197,7 @@ export default function MaterialRequestPage() {
           <CardDescription>Track the status of material requisitions</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border">
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -271,5 +273,6 @@ export default function MaterialRequestPage() {
         onClose={() => setIsReceiptOpen(false)}
       />
     </div>
+    </PageTransition>
   );
 }

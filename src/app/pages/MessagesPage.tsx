@@ -1,3 +1,4 @@
+import PageTransition from '../components/PageTransition';
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -5,9 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Textarea } from '../components/ui/textarea';
 import { Badge } from '../components/ui/badge';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
 import {
   Dialog,
   DialogContent,
@@ -16,424 +23,385 @@ import {
   DialogHeader,
   DialogTitle,
 } from '../components/ui/dialog';
-import { MessageSquare, Send, Mail, MailOpen, AlertCircle, Clock } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { SystemUser } from '../data/mockData';
+import { Plus, Edit, Trash2, ShieldAlert, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription } from '../components/ui/alert';
 import { toast } from 'sonner';
-import { Message } from '../data/mockData';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
-export default function MessagesPage() {
+export default function UsersPage() {
   const { user } = useAuth();
-  const { messages, addMessage, markMessageAsRead, users, requests } = useData();
-  const [isComposeOpen, setIsComposeOpen] = useState(false);
-  const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
-  const [isViewOpen, setIsViewOpen] = useState(false);
+  const { users, addUser, updateUser, deleteUser } = useData();
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<SystemUser | null>(null);
   const [formData, setFormData] = useState({
-    recipientId: '',
-    subject: '',
-    content: '',
-    relatedRequestId: ''
+    username: '',
+    email: '',
+    fullName: '',
+    role: 'engineer' as 'admin' | 'staff' | 'engineer' | 'manager',
+    password: ''
   });
 
-  const isEngineer = user?.role === 'engineer';
-  const isManager = user?.role === 'manager';
+  const isAdmin = user?.role === 'admin';
 
-  if (!isEngineer && !isManager) {
+  if (!isAdmin) {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Messages</h1>
-          <p className="text-slate-600 mt-1">Communication center</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">User Management</h1>
+          <p className="text-slate-600 mt-1">Manage system users and permissions</p>
         </div>
         <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
+          <ShieldAlert className="h-4 w-4" />
           <AlertDescription>
-            You do not have permission to access this page. Only Engineers and Project Managers can send messages.
+            You do not have permission to access this page. Only administrators can manage users.
           </AlertDescription>
         </Alert>
       </div>
     );
   }
 
-  // Get recipients (engineers for managers, managers for engineers)
-  const recipients = users.filter(u => 
-    isEngineer ? u.role === 'manager' : u.role === 'engineer'
-  );
+  const handleAdd = () => {
+    addUser({
+      username: formData.username,
+      email: formData.email,
+      fullName: formData.fullName,
+      role: formData.role,
+      status: 'active',
+      lastLogin: new Date().toISOString()
+    });
 
-  // Filter messages for current user
-  const receivedMessages = messages.filter(m => m.recipientId === user?.id);
-  const sentMessages = messages.filter(m => m.senderId === user?.id);
-  const unreadCount = receivedMessages.filter(m => !m.read).length;
+    toast.success('User created successfully');
+    setIsAddDialogOpen(false);
+    resetForm();
+  };
 
-  const handleCompose = () => {
+  const handleEdit = () => {
+    if (!selectedUser) return;
+
+    updateUser(selectedUser.id, {
+      username: formData.username,
+      email: formData.email,
+      fullName: formData.fullName,
+      role: formData.role
+    });
+
+    toast.success('User updated successfully');
+    setIsEditDialogOpen(false);
+    resetForm();
+  };
+
+  const handleDelete = () => {
+    if (!selectedUser) return;
+
+    deleteUser(selectedUser.id);
+    toast.success('User deleted successfully');
+    setIsDeleteDialogOpen(false);
+    setSelectedUser(null);
+  };
+
+  const resetForm = () => {
     setFormData({
-      recipientId: '',
-      subject: '',
-      content: '',
-      relatedRequestId: ''
+      username: '',
+      email: '',
+      fullName: '',
+      role: 'viewer',
+      password: ''
     });
-    setIsComposeOpen(true);
+    setSelectedUser(null);
   };
 
-  const handleSendMessage = () => {
-    if (!user || !formData.recipientId || !formData.subject || !formData.content) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    const recipient = recipients.find(r => r.id === formData.recipientId);
-    if (!recipient) {
-      toast.error('Invalid recipient selected');
-      return;
-    }
-
-    addMessage({
-      senderId: user.id,
-      senderName: user.fullName,
-      senderRole: user.role,
-      recipientId: recipient.id,
-      recipientName: recipient.fullName,
-      recipientRole: recipient.role,
-      subject: formData.subject,
-      content: formData.content,
-      timestamp: new Date().toISOString(),
-      read: false,
-      relatedRequestId: formData.relatedRequestId || undefined
+  const openEditDialog = (user: SystemUser) => {
+    setSelectedUser(user);
+    setFormData({
+      username: user.username,
+      email: user.email,
+      fullName: user.fullName,
+      role: user.role,
+      password: ''
     });
-
-    toast.success(`Message sent to ${recipient.fullName}`);
-    setIsComposeOpen(false);
-    setFormData({ recipientId: '', subject: '', content: '', relatedRequestId: '' });
+    setIsEditDialogOpen(true);
   };
 
-  const handleViewMessage = (message: Message) => {
-    setSelectedMessage(message);
-    setIsViewOpen(true);
-    
-    // Mark as read if it's received and unread
-    if (message.recipientId === user?.id && !message.read) {
-      markMessageAsRead(message.id);
+  const openDeleteDialog = (user: SystemUser) => {
+    setSelectedUser(user);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'destructive';
+      case 'staff':
+        return 'default';
+      case 'engineer':
+        return 'default';
+      case 'manager':
+        return 'default';
+      default:
+        return 'secondary';
     }
   };
 
-  const formatTimestamp = (timestamp: string) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    
-    if (hours < 1) {
-      const minutes = Math.floor(diff / (1000 * 60));
-      return `${minutes} min ago`;
-    } else if (hours < 24) {
-      return `${hours} hour${hours > 1 ? 's' : ''} ago`;
-    } else {
-      return date.toLocaleDateString();
+  const getRoleBadgeClass = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'bg-red-600';
+      case 'staff':
+        return 'bg-blue-600';
+      case 'engineer':
+        return 'bg-green-600';
+      case 'manager':
+        return 'bg-purple-600';
+      default:
+        return '';
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Messages</h1>
-          <p className="text-slate-600 mt-1">Communicate with team members</p>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">User Management</h1>
+          <p className="text-slate-600 mt-1">Manage system users and assign roles</p>
         </div>
-        <Button
-          onClick={handleCompose}
-          className="bg-yellow-500 hover:bg-yellow-600 text-slate-900"
-        >
-          <Send className="h-4 w-4 mr-2" />
-          Compose Message
+        <Button onClick={() => setIsAddDialogOpen(true)} className="bg-orange-600 hover:bg-orange-700 self-start sm:self-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          Add User
         </Button>
       </div>
 
-      {/* Stats */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unread Messages</CardTitle>
-            <Mail className="h-4 w-4 text-yellow-600" />
+          <CardHeader>
+            <CardTitle>Total Users</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{unreadCount}</div>
-            <p className="text-xs text-slate-600 mt-1">Waiting for your attention</p>
+            <div className="text-3xl font-bold">{users.length}</div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Received</CardTitle>
-            <MailOpen className="h-4 w-4 text-blue-600" />
+          <CardHeader>
+            <CardTitle>Active Users</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{receivedMessages.length}</div>
-            <p className="text-xs text-slate-600 mt-1">Messages received</p>
+            <div className="text-3xl font-bold text-green-600">
+              {users.filter(u => u.status === 'active').length}
+            </div>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sent Messages</CardTitle>
-            <MessageSquare className="h-4 w-4 text-green-600" />
+          <CardHeader>
+            <CardTitle>Inactive Users</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{sentMessages.length}</div>
-            <p className="text-xs text-slate-600 mt-1">Messages sent</p>
+            <div className="text-3xl font-bold text-slate-400">
+              {users.filter(u => u.status === 'inactive').length}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Messages</CardTitle>
-          <CardDescription>View and manage your conversations</CardDescription>
+          <CardTitle>System Users</CardTitle>
+          <CardDescription>Manage user accounts and permissions</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="received">
-            <TabsList className="mb-4">
-              <TabsTrigger value="received">
-                Received ({receivedMessages.length})
-              </TabsTrigger>
-              <TabsTrigger value="sent">
-                Sent ({sentMessages.length})
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="received">
-              <div className="space-y-2">
-                {receivedMessages.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>No received messages yet.</AlertDescription>
-                  </Alert>
-                ) : (
-                  receivedMessages.map((message) => (
-                    <div
-                      key={message.id}
-                      onClick={() => handleViewMessage(message)}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors hover:bg-slate-50 ${
-                        !message.read ? 'bg-yellow-50 border-yellow-200' : 'bg-white'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            {!message.read ? (
-                              <Mail className="h-4 w-4 text-yellow-600" />
-                            ) : (
-                              <MailOpen className="h-4 w-4 text-slate-400" />
-                            )}
-                            <span className={`font-medium ${!message.read ? 'text-slate-900' : 'text-slate-700'}`}>
-                              {message.senderName}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                              {message.senderRole.toUpperCase()}
-                            </Badge>
-                            {message.relatedRequestId && (
-                              <Badge className="bg-blue-600 text-xs">
-                                {message.relatedRequestId}
-                              </Badge>
-                            )}
-                          </div>
-                          <h4 className={`text-sm mb-1 ${!message.read ? 'font-semibold' : 'font-normal'}`}>
-                            {message.subject}
-                          </h4>
-                          <p className="text-sm text-slate-600 line-clamp-1">{message.content}</p>
-                        </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1 ml-4">
-                          <Clock className="h-3 w-3" />
-                          {formatTimestamp(message.timestamp)}
-                        </div>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Username</TableHead>
+                  <TableHead>Full Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Login</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.username}</TableCell>
+                    <TableCell>{user.fullName}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge variant={getRoleBadgeVariant(user.role)} className={getRoleBadgeClass(user.role)}>
+                        {user.role.toUpperCase()}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
+                        {user.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(user.lastLogin).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openEditDialog(user)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => openDeleteDialog(user)}
+                        >
+                          <Trash2 className="h-4 w-4 text-red-600" />
+                        </Button>
                       </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </TabsContent>
-
-            <TabsContent value="sent">
-              <div className="space-y-2">
-                {sentMessages.length === 0 ? (
-                  <Alert>
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>No sent messages yet.</AlertDescription>
-                  </Alert>
-                ) : (
-                  sentMessages.map((message) => (
-                    <div
-                      key={message.id}
-                      onClick={() => handleViewMessage(message)}
-                      className="p-4 border rounded-lg cursor-pointer transition-colors hover:bg-slate-50 bg-white"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Send className="h-4 w-4 text-green-600" />
-                            <span className="font-medium text-slate-700">To: {message.recipientName}</span>
-                            <Badge variant="outline" className="text-xs">
-                              {message.recipientRole.toUpperCase()}
-                            </Badge>
-                            {message.relatedRequestId && (
-                              <Badge className="bg-blue-600 text-xs">
-                                {message.relatedRequestId}
-                              </Badge>
-                            )}
-                          </div>
-                          <h4 className="text-sm font-normal mb-1">{message.subject}</h4>
-                          <p className="text-sm text-slate-600 line-clamp-1">{message.content}</p>
-                        </div>
-                        <div className="text-xs text-slate-500 flex items-center gap-1 ml-4">
-                          <Clock className="h-3 w-3" />
-                          {formatTimestamp(message.timestamp)}
-                        </div>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </TabsContent>
-          </Tabs>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Compose Message Dialog */}
-      <Dialog open={isComposeOpen} onOpenChange={setIsComposeOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* Add User Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Compose Message</DialogTitle>
-            <DialogDescription>
-              Send a message to {isEngineer ? 'Project Managers' : 'Engineers'}
-            </DialogDescription>
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogDescription>Create a new user account</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
+          <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Recipient</Label>
-              <Select
-                value={formData.recipientId}
-                onValueChange={(value) => setFormData({ ...formData, recipientId: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select recipient" />
-                </SelectTrigger>
-                <SelectContent>
-                  {recipients.map((recipient) => (
-                    <SelectItem key={recipient.id} value={recipient.id}>
-                      {recipient.fullName} ({recipient.role})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Related Request (Optional)</Label>
-              <Select
-                value={formData.relatedRequestId || 'none'}
-                onValueChange={(value) => setFormData({ ...formData, relatedRequestId: value === 'none' ? '' : value })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select request (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">None</SelectItem>
-                  {requests.map((request) => (
-                    <SelectItem key={request.id} value={request.id}>
-                      {request.id} - {request.materialName}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Subject</Label>
+              <Label>Username</Label>
               <Input
-                value={formData.subject}
-                onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                placeholder="Enter subject"
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                placeholder="Enter username"
               />
             </div>
-
             <div className="space-y-2">
-              <Label>Message</Label>
-              <Textarea
-                value={formData.content}
-                onChange={(e) => setFormData({ ...formData, content: e.target.value })}
-                placeholder="Type your message here..."
-                rows={6}
+              <Label>Full Name</Label>
+              <Input
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                placeholder="Enter full name"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="Enter email"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Password</Label>
+              <Input
+                type="password"
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Enter password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value: 'admin' | 'staff' | 'engineer' | 'manager') => setFormData({ ...formData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin - Full Access</SelectItem>
+                  <SelectItem value="staff">Warehouse Staff - Manage IN/OUT</SelectItem>
+                  <SelectItem value="engineer">Engineer - Submit Requests</SelectItem>
+                  <SelectItem value="manager">Project Manager - Approve Requests</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsComposeOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSendMessage}
-              className="bg-blue-600 hover:bg-blue-700"
-              disabled={!formData.recipientId || !formData.subject || !formData.content}
-            >
-              <Send className="h-4 w-4 mr-2" />
-              Send Message
-            </Button>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleAdd} className="bg-orange-600 hover:bg-orange-700">Create User</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* View Message Dialog */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent className="max-w-2xl">
+      {/* Edit User Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {selectedMessage?.senderId === user?.id ? (
-                <>
-                  <Send className="h-5 w-5 text-green-600" />
-                  Sent Message
-                </>
-              ) : (
-                <>
-                  {selectedMessage?.read ? (
-                    <MailOpen className="h-5 w-5 text-slate-600" />
-                  ) : (
-                    <Mail className="h-5 w-5 text-yellow-600" />
-                  )}
-                  Received Message
-                </>
-              )}
-            </DialogTitle>
-            <DialogDescription>
-              {selectedMessage?.senderId === user?.id
-                ? `To: ${selectedMessage?.recipientName}`
-                : `From: ${selectedMessage?.senderName}`}
-            </DialogDescription>
+            <DialogTitle>Edit User</DialogTitle>
+            <DialogDescription>Update user information and role</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="flex items-center gap-2">
-              <Badge variant="outline">
-                {selectedMessage?.senderId === user?.id
-                  ? selectedMessage?.recipientRole.toUpperCase()
-                  : selectedMessage?.senderRole.toUpperCase()}
-              </Badge>
-              {selectedMessage?.relatedRequestId && (
-                <Badge className="bg-blue-600">
-                  Related: {selectedMessage.relatedRequestId}
-                </Badge>
-              )}
-              <span className="text-sm text-slate-500 ml-auto">
-                {selectedMessage && new Date(selectedMessage.timestamp).toLocaleString()}
-              </span>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Username</Label>
+              <Input
+                value={formData.username}
+                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+              />
             </div>
-
-            <div className="border-t pt-4">
-              <h3 className="font-semibold text-lg mb-2">{selectedMessage?.subject}</h3>
-              <p className="text-slate-700 whitespace-pre-wrap">{selectedMessage?.content}</p>
+            <div className="space-y-2">
+              <Label>Full Name</Label>
+              <Input
+                value={formData.fullName}
+                onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={formData.role}
+                onValueChange={(value: 'admin' | 'staff' | 'engineer' | 'manager') => setFormData({ ...formData, role: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin - Full Access</SelectItem>
+                  <SelectItem value="staff">Warehouse Staff - Manage IN/OUT</SelectItem>
+                  <SelectItem value="engineer">Engineer - Submit Requests</SelectItem>
+                  <SelectItem value="manager">Project Manager - Approve Requests</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsViewOpen(false)}>
-              Close
-            </Button>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleEdit} className="bg-orange-600 hover:bg-orange-700">Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete user "{selectedUser?.username}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete}>Delete User</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

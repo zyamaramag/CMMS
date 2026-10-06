@@ -1,3 +1,4 @@
+import PageTransition from '../components/PageTransition';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
@@ -41,13 +42,13 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Admin Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Admin Dashboard</h1>
           <p className="text-slate-600 mt-1">System overview and user management (View-Only for transactions)</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card
-            className="cursor-pointer hover:shadow-md transition-shadow bg-gradient-to-br from-green-50 to-green-100 border-green-200"
+            className="cursor-pointer card-hover bg-gradient-to-br from-green-50 to-green-100 border-green-200"
             onClick={() => navigate('/security')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -83,7 +84,7 @@ export default function DashboardPage() {
           </Card>
 
           <Card
-            className="cursor-pointer hover:shadow-md transition-shadow"
+            className="cursor-pointer card-hover"
             onClick={() => navigate('/user-approvals')}
           >
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -190,7 +191,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Warehouse Staff Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Warehouse Staff Dashboard</h1>
           <p className="text-slate-600 mt-1">Material handling and approved requests</p>
         </div>
 
@@ -290,7 +291,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Engineer Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Engineer Dashboard</h1>
           <p className="text-slate-600 mt-1">View inventory and communicate with project managers</p>
         </div>
 
@@ -396,7 +397,7 @@ export default function DashboardPage() {
     return (
       <div className="space-y-6">
         <div>
-          <h1 className="text-3xl font-semibold text-slate-900">Project Manager Dashboard</h1>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Project Manager Dashboard</h1>
           <p className="text-slate-600 mt-1">View requests and monitor inventory (Read-Only)</p>
         </div>
 
@@ -539,7 +540,7 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-slate-900">Dashboard</h1>
+        <h1 className="text-2xl sm:text-3xl font-semibold text-slate-900">Dashboard</h1>
         <p className="text-slate-600 mt-1">Welcome to HVL Materials Management System</p>
       </div>
       <Card>
